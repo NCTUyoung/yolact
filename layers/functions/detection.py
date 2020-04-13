@@ -108,7 +108,7 @@ class Detect(object):
         return {'box': boxes, 'mask': masks, 'class': classes, 'score': scores}
 
 
-    def cc_fast_nms(self, boxes, masks, scores, iou_threshold:float=0.5, top_k:int=200):
+    def cc_fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200):
         # Collapse all the classes into 1 
         scores, classes = scores.max(dim=0)
 
@@ -134,7 +134,7 @@ class Detect(object):
         
         return boxes[idx_out], masks[idx_out], classes[idx_out], scores[idx_out]
 
-    def fast_nms(self, boxes, masks, scores, iou_threshold:float=0.5, top_k:int=200, second_threshold:bool=False):
+    def fast_nms(self, boxes, masks, scores, iou_threshold=0.5, top_k=200, second_threshold=False):
         scores, idx = scores.sort(1, descending=True)
 
         idx = idx[:, :top_k].contiguous()

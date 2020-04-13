@@ -17,6 +17,10 @@ import torch.backends.cudnn as cudnn
 from utils import timer
 from utils.functions import MovingAverage, make_net
 
+
+class non_local():
+    def __init__(self):
+        self.in_channels = 0
 # This is required for Pytorch 1.0.1 on Windows to initialize Cuda on some driver versions.
 # See the bug report here: https://github.com/pytorch/pytorch/issues/17108
 torch.cuda.current_device()
@@ -33,7 +37,7 @@ script_method_wrapper = torch.jit.script_method if use_jit else lambda fn, _rcn=
 
 class Concat(nn.Module):
     def __init__(self, nets, extra_params):
-        super().__init__()
+        super(Concat,self).__init__()
 
         self.nets = nn.ModuleList(nets)
         self.extra_params = extra_params
@@ -71,7 +75,7 @@ class PredictionModule(nn.Module):
     """
     
     def __init__(self, in_channels, out_channels=1024, aspect_ratios=[[1]], scales=[1], parent=None, index=0):
-        super().__init__()
+        super(PredictionModule,self).__init__()
 
         self.num_classes = cfg.num_classes
         self.mask_dim    = cfg.mask_dim # Defined by Yolact
@@ -79,18 +83,19 @@ class PredictionModule(nn.Module):
         self.parent      = [parent] # Don't include this in the state dict
         self.index       = index
         self.num_heads   = cfg.num_heads # Defined by Yolact
-
+        self.in_channels = in_channels
+        print(self)
         if cfg.mask_proto_split_prototypes_by_head and cfg.mask_type == mask_type.lincomb:
             self.mask_dim = self.mask_dim // self.num_heads
 
         if cfg.mask_proto_prototypes_as_features:
-            in_channels += self.mask_dim
+            self.in_channels += self.mask_dim
         
         if parent is None:
             if cfg.extra_head_net is None:
-                out_channels = in_channels
+                out_channels = self.in_channels
             else:
-                self.upfeature, out_channels = make_net(in_channels, cfg.extra_head_net)
+                self.upfeature, out_channels = make_net(self, cfg.extra_head_net)
 
             if cfg.use_prediction_module:
                 self.block = Bottleneck(out_channels, out_channels // 4)
@@ -227,12 +232,15 @@ class PredictionModule(nn.Module):
                     y = (j + 0.5) / conv_h
                     
                     for ars in self.aspect_ratios:
+                        print(self.aspect_ratios)
                         for scale in self.scales:
                             for ar in ars:
                                 if not cfg.backbone.preapply_sqrt:
+                                    
                                     ar = sqrt(ar)
 
                                 if cfg.backbone.use_pixel_scales:
+                                    
                                     w = scale * ar / cfg.max_size
                                     h = scale / ar / cfg.max_size
                                 else:
@@ -281,7 +289,7 @@ class FPN(ScriptModuleWrapper):
                      'lat_layers', 'pred_layers', 'downsample_layers', 'relu_downsample_layers']
 
     def __init__(self, in_channels):
-        super().__init__()
+        super(FPN,self).__init__()
 
         self.lat_layers  = nn.ModuleList([
             nn.Conv2d(x, cfg.fpn.num_features, kernel_size=1)
@@ -307,8 +315,8 @@ class FPN(ScriptModuleWrapper):
         self.relu_downsample_layers = cfg.fpn.relu_downsample_layers
         self.relu_pred_layers       = cfg.fpn.relu_pred_layers
 
-    @script_method_wrapper
-    def forward(self, convouts:List[torch.Tensor]):
+    
+    def forward(self, convouts):
         """
         Args:
             - convouts (list): A list of convouts for the corresponding layers in in_channels.
@@ -363,7 +371,7 @@ class FPN(ScriptModuleWrapper):
 class FastMaskIoUNet(ScriptModuleWrapper):
 
     def __init__(self):
-        super().__init__()
+        super(FastMaskIoUNet,self).__init__()
         input_channels = 1
         last_layer = [(cfg.num_classes-1, 1, {})]
         self.maskiou_net, _ = make_net(input_channels, cfg.maskiou_net + last_layer, include_last_relu=True)
@@ -378,16 +386,6 @@ class FastMaskIoUNet(ScriptModuleWrapper):
 
 class Yolact(nn.Module):
     """
-
-
-    ██╗   ██╗ ██████╗ ██╗      █████╗  ██████╗████████╗
-    ╚██╗ ██╔╝██╔═══██╗██║     ██╔══██╗██╔════╝╚══██╔══╝
-     ╚████╔╝ ██║   ██║██║     ███████║██║        ██║   
-      ╚██╔╝  ██║   ██║██║     ██╔══██║██║        ██║   
-       ██║   ╚██████╔╝███████╗██║  ██║╚██████╗   ██║   
-       ╚═╝    ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝ 
-
-
     You can set the arguments by changing them in the backbone config object in config.py.
 
     Parameters (in cfg.backbone):
@@ -397,10 +395,10 @@ class Yolact(nn.Module):
     """
 
     def __init__(self):
-        super().__init__()
+        super(Yolact,self).__init__()
 
         self.backbone = construct_backbone(cfg.backbone)
-
+        self.in_channels = 3
         if cfg.freeze_bn:
             self.freeze_bn()
 
@@ -416,13 +414,13 @@ class Yolact(nn.Module):
 
             self.proto_src = cfg.mask_proto_src
             
-            if self.proto_src is None: in_channels = 3
-            elif cfg.fpn is not None: in_channels = cfg.fpn.num_features
-            else: in_channels = self.backbone.channels[self.proto_src]
-            in_channels += self.num_grids
+            if self.proto_src is None: self.in_channels = 3
+            elif cfg.fpn is not None: self.in_channels = cfg.fpn.num_features
+            else: self.in_channels = self.backbone.channels[self.proto_src]
+            self.in_channels += self.num_grids
 
             # The include_last_relu=false here is because we might want to change it to another function
-            self.proto_net, cfg.mask_dim = make_net(in_channels, cfg.mask_proto_net, include_last_relu=False)
+            self.proto_net, cfg.mask_dim = make_net(self, cfg.mask_proto_net, include_last_relu=False)
 
             if cfg.mask_proto_bias:
                 cfg.mask_dim += 1
@@ -547,7 +545,7 @@ class Yolact(nn.Module):
                         module.bias.data.zero_()
     
     def train(self, mode=True):
-        super().train(mode)
+        super(Yolact,self).train(mode)
 
         if cfg.freeze_bn:
             self.freeze_bn()
@@ -574,6 +572,7 @@ class Yolact(nn.Module):
             with timer.env('fpn'):
                 # Use backbone.selected_layers because we overwrote self.selected_layers
                 outs = [outs[i] for i in cfg.backbone.selected_layers]
+                print(outs)
                 outs = self.fpn(outs)
 
         proto_out = None

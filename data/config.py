@@ -54,6 +54,7 @@ COCO_LABEL_MAP = { 1:  1,  2:  2,  3:  3,  4:  4,  5:  5,  6:  6,  7:  7,  8:  8
                   74: 65, 75: 66, 76: 67, 77: 68, 78: 69, 79: 70, 80: 71, 81: 72,
                   82: 73, 84: 74, 85: 75, 86: 76, 87: 77, 88: 78, 89: 79, 90: 80}
 
+PVB_CLASSES = ('person', 'vehicle', 'bike')
 
 
 # ----------------------- CONFIG CLASS ----------------------- #
@@ -95,9 +96,9 @@ class Config(object):
         for key, val in new_config_dict.items():
             self.__setattr__(key, val)
     
-    def print(self):
-        for k, v in vars(self).items():
-            print(k, ' = ', v)
+    # def print(self):
+    #     for k, v in vars(self).items():
+    #         print(k, ' = ', v)
 
 
 
@@ -128,52 +129,26 @@ dataset_base = Config({
     'label_map': None
 })
 
-coco2014_dataset = dataset_base.copy({
-    'name': 'COCO 2014',
+coco2017_PVB_dataset = dataset_base.copy({
+    'name': 'COCO 2017 PVB',
     
-    'train_info': './data/coco/annotations/instances_train2014.json',
-    'valid_info': './data/coco/annotations/instances_val2014.json',
+    'train_info': './data/coco/annotations/instances_train2017_PVB.json',
+    'valid_info': './data/coco/annotations/instances_val2017_PVB.json',
 
-    'label_map': COCO_LABEL_MAP
+    'class_names': PVB_CLASSES,
+    'label_map': None,
 })
+cityscapes_PVB_dataset = dataset_base.copy({
+    'name': 'Cityscapes PVB',
+    'train_images': './data/cityscapes/images/',
+    'train_info': './data/cityscapes/annotations/train_PVB.json',
 
-coco2017_dataset = dataset_base.copy({
-    'name': 'COCO 2017',
-    
-    'train_info': './data/coco/annotations/instances_train2017.json',
-    'valid_info': './data/coco/annotations/instances_val2017.json',
+    'valid_images': './data/cityscapes/images/',
+    'valid_info': './data/cityscapes/annotations/val_PVB.json',
 
-    'label_map': COCO_LABEL_MAP
+    'class_names': PVB_CLASSES,
+    'label_map': None,
 })
-
-coco2017_testdev_dataset = dataset_base.copy({
-    'name': 'COCO 2017 Test-Dev',
-
-    'valid_info': './data/coco/annotations/image_info_test-dev2017.json',
-    'has_gt': False,
-
-    'label_map': COCO_LABEL_MAP
-})
-
-PASCAL_CLASSES = ("aeroplane", "bicycle", "bird", "boat", "bottle",
-                  "bus", "car", "cat", "chair", "cow", "diningtable",
-                  "dog", "horse", "motorbike", "person", "pottedplant",
-                  "sheep", "sofa", "train", "tvmonitor")
-
-pascal_sbd_dataset = dataset_base.copy({
-    'name': 'Pascal SBD 2012',
-
-    'train_images': './data/sbd/img',
-    'valid_images': './data/sbd/img',
-    
-    'train_info': './data/sbd/pascal_sbd_train.json',
-    'valid_info': './data/sbd/pascal_sbd_val.json',
-
-    'class_names': PASCAL_CLASSES,
-})
-
-
-
 
 
 # ----------------------- TRANSFORMS ----------------------- #
@@ -415,7 +390,7 @@ fpn_base = Config({
 # ----------------------- CONFIG DEFAULTS ----------------------- #
 
 coco_base_config = Config({
-    'dataset': coco2014_dataset,
+    'dataset': dataset_base,
     'num_classes': 81, # This should include the background class
 
     'max_iter': 400000,
@@ -624,7 +599,7 @@ coco_base_config = Config({
     'delayed_settings': [],
 
     # Use command-line arguments to set this.
-    'no_jit': False,
+    'no_jit': True,
 
     'backbone': None,
     'name': 'base_config',
@@ -657,8 +632,8 @@ yolact_base_config = coco_base_config.copy({
     'name': 'yolact_base',
 
     # Dataset stuff
-    'dataset': coco2017_dataset,
-    'num_classes': len(coco2017_dataset.class_names) + 1,
+    'dataset': dataset_base,
+    'num_classes': len(dataset_base.class_names) + 1,
 
     # Image Size
     'max_size': 550,
@@ -672,9 +647,9 @@ yolact_base_config = coco_base_config.copy({
         'selected_layers': list(range(1, 4)),
         'use_pixel_scales': True,
         'preapply_sqrt': False,
-        'use_square_anchors': True, # This is for backward compatability with a bug
+        'use_square_anchors': False, # This is for backward compatability with a bug
 
-        'pred_aspect_ratios': [ [[1, 1/2, 2]] ]*5,
+        'pred_aspect_ratios': [ [[1, 0.5 ,2 ]] ]*5,
         'pred_scales': [[24], [48], [96], [192], [384]],
     }),
 
@@ -746,26 +721,10 @@ yolact_resnet50_config = yolact_base_config.copy({
         'pred_aspect_ratios': yolact_base_config.backbone.pred_aspect_ratios,
         'use_pixel_scales': True,
         'preapply_sqrt': False,
-        'use_square_anchors': True, # This is for backward compatability with a bug
+        'use_square_anchors': False, # This is for backward compatability with a bug
     }),
 })
 
-
-yolact_resnet50_pascal_config = yolact_resnet50_config.copy({
-    'name': None, # Will default to yolact_resnet50_pascal
-    
-    # Dataset stuff
-    'dataset': pascal_sbd_dataset,
-    'num_classes': len(pascal_sbd_dataset.class_names) + 1,
-
-    'max_iter': 120000,
-    'lr_steps': (60000, 100000),
-    
-    'backbone': yolact_resnet50_config.backbone.copy({
-        'pred_scales': [[32], [64], [128], [256], [512]],
-        'use_square_anchors': False,
-    })
-})
 
 # ----------------------- YOLACT++ CONFIGS ----------------------- #
 
@@ -806,10 +765,23 @@ yolact_plus_resnet50_config = yolact_plus_base_config.copy({
 })
 
 
+yolact_resnet50_coco_PVB_config = yolact_resnet50_config.copy({
+    'name': 'yolact_resnet50_coco_PVB',
+    'num_classes': len(coco2017_PVB_dataset.class_names) + 1,
+    'dataset': coco2017_PVB_dataset,
+})
+yolact_resnet50_cityscapes_PVB_config = yolact_resnet50_config.copy({
+    'name': 'yolact_resnet50_cityscapes_PVB',
+    'num_classes': len(cityscapes_PVB_dataset.class_names) + 1,
+    'dataset': cityscapes_PVB_dataset,
+})
+
+
+
 # Default config
 cfg = yolact_base_config.copy()
 
-def set_cfg(config_name:str):
+def set_cfg(config_name):
     """ Sets the active config. Works even if cfg is already imported! """
     global cfg
 
@@ -820,7 +792,7 @@ def set_cfg(config_name:str):
     if cfg.name is None:
         cfg.name = config_name.split('_config')[0]
 
-def set_dataset(dataset_name:str):
+def set_dataset(dataset_name):
     """ Sets the dataset of the current config. """
     cfg.dataset = eval(dataset_name)
     

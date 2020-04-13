@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import torch
 import torch.nn as nn
 import os
@@ -102,17 +103,17 @@ class SavePath:
     What am I doing with my life?
     """
 
-    def __init__(self, model_name:str, epoch:int, iteration:int):
+    def __init__(self, model_name, epoch, iteration):
         self.model_name = model_name
         self.epoch = epoch
         self.iteration = iteration
 
-    def get_path(self, root:str=''):
+    def get_path(self, root=''):
         file_name = self.model_name + '_' + str(self.epoch) + '_' + str(self.iteration) + '.pth'
         return os.path.join(root, file_name)
 
     @staticmethod
-    def from_str(path:str):
+    def from_str(path):
         file_name = os.path.basename(path)
         
         if file_name.endswith('.pth'):
@@ -160,13 +161,14 @@ class SavePath:
 
         return max_name
 
-def make_net(in_channels, conf, include_last_relu=True):
+def make_net(self_, conf, include_last_relu=True):
     """
     A helper function to take a config setting and turn it into a network.
     Used by protonet and extrahead. Returns (network, out_channels)
     """
-    def make_layer(layer_cfg):
-        nonlocal in_channels
+
+    def make_layer(self_,layer_cfg):
+        
         
         # Possible patterns:
         # ( 256, 3, {}) -> conv
@@ -180,7 +182,7 @@ def make_net(in_channels, conf, include_last_relu=True):
             layer_name = layer_cfg[0]
 
             if layer_name == 'cat':
-                nets = [make_net(in_channels, x) for x in layer_cfg[1]]
+                nets = [make_net(self_.in_channels, x) for x in layer_cfg[1]]
                 layer = Concat([net[0] for net in nets], layer_cfg[2])
                 num_channels = sum([net[1] for net in nets])
         else:
@@ -188,14 +190,14 @@ def make_net(in_channels, conf, include_last_relu=True):
             kernel_size = layer_cfg[1]
 
             if kernel_size > 0:
-                layer = nn.Conv2d(in_channels, num_channels, kernel_size, **layer_cfg[2])
+                layer = nn.Conv2d(self_.in_channels, num_channels, kernel_size, **layer_cfg[2])
             else:
                 if num_channels is None:
                     layer = InterpolateModule(scale_factor=-kernel_size, mode='bilinear', align_corners=False, **layer_cfg[2])
                 else:
-                    layer = nn.ConvTranspose2d(in_channels, num_channels, -kernel_size, **layer_cfg[2])
+                    layer = nn.ConvTranspose2d(self_.in_channels, num_channels, -kernel_size, **layer_cfg[2])
         
-        in_channels = num_channels if num_channels is not None else in_channels
+        self_.in_channels = num_channels if num_channels is not None else self_.in_channels
 
         # Don't return a ReLU layer if we're doing an upsample. This probably doesn't affect anything
         # output-wise, but there's no need to go through a ReLU here.
@@ -206,8 +208,8 @@ def make_net(in_channels, conf, include_last_relu=True):
         return [layer, nn.ReLU(inplace=True)]
 
     # Use sum to concat together all the component layer lists
-    net = sum([make_layer(x) for x in conf], [])
+    net = sum([make_layer(self_,x) for x in conf], [])
     if not include_last_relu:
         net = net[:-1]
 
-    return nn.Sequential(*(net)), in_channels
+    return nn.Sequential(*(net)), self_.in_channels

@@ -1,3 +1,4 @@
+from __future__ import division
 from data import COCODetection, get_label_map, MEANS, COLORS
 from yolact import Yolact
 from utils.augmentations import BaseTransform, FastBaseTransform, Resize
@@ -303,7 +304,7 @@ class Detections:
         self.bbox_data = []
         self.mask_data = []
 
-    def add_bbox(self, image_id:int, category_id:int, bbox:list, score:float):
+    def add_bbox(self, image_id, category_id, bbox, score):
         """ Note that bbox should be a list or tuple of (x1, y1, x2, y2) """
         bbox = [bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]
 
@@ -317,7 +318,7 @@ class Detections:
             'score': float(score)
         })
 
-    def add_mask(self, image_id:int, category_id:int, segmentation:np.ndarray, score:float):
+    def add_mask(self, image_id, category_id, segmentation, score):
         """ The segmentation should be the full mask, the size of the image and with size [h, w]. """
         rle = pycocotools.mask.encode(np.asfortranarray(segmentation.astype(np.uint8)))
         rle['counts'] = rle['counts'].decode('ascii') # json.dump doesn't like bytes strings
@@ -383,7 +384,7 @@ def _bbox_iou(bbox1, bbox2, iscrowd=False):
         ret = jaccard(bbox1, bbox2, iscrowd)
     return ret.cpu()
 
-def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections:Detections=None):
+def prep_metrics(ap_data, dets, img, gt, gt_masks, h, w, num_crowd, image_id, detections=None):
     """ Returns a list of APs for this image, with each element being for a class  """
     if not args.output_coco_json:
         with timer.env('Prepare gt'):
@@ -520,17 +521,17 @@ class APDataObject:
         self.data_points = []
         self.num_gt_positives = 0
 
-    def push(self, score:float, is_true:bool):
+    def push(self, score, is_true):
         self.data_points.append((score, is_true))
     
-    def add_gt_positives(self, num_positives:int):
+    def add_gt_positives(self, num_positives):
         """ Call this once per image. """
         self.num_gt_positives += num_positives
 
-    def is_empty(self) -> bool:
+    def is_empty(self) :
         return len(self.data_points) == 0 and self.num_gt_positives == 0
 
-    def get_ap(self) -> float:
+    def get_ap(self) :
         """ Warning: result not cached. """
 
         if self.num_gt_positives == 0:
@@ -592,7 +593,7 @@ def badhash(x):
     x =  ((x >> 16) ^ x) & 0xFFFFFFFF
     return x
 
-def evalimage(net:Yolact, path:str, save_path:str=None):
+def evalimage(net, path, save_path=None):
     frame = torch.from_numpy(cv2.imread(path)).cuda().float()
     batch = FastBaseTransform()(frame.unsqueeze(0))
     preds = net(batch)
@@ -609,7 +610,7 @@ def evalimage(net:Yolact, path:str, save_path:str=None):
     else:
         cv2.imwrite(save_path, img_numpy)
 
-def evalimages(net:Yolact, input_folder:str, output_folder:str):
+def evalimages(net, input_folder, output_folder):
     if not os.path.exists(output_folder):
         os.mkdir(output_folder)
 
@@ -633,7 +634,7 @@ class CustomDataParallel(torch.nn.DataParallel):
         # Note that I don't actually want to convert everything to the output_device
         return sum(outputs, [])
 
-def evalvideo(net:Yolact, path:str, out_path:str=None):
+def evalvideo(net, path, out_path=None):
     # If the path is a digit, parse it as a webcam index
     is_webcam = path.isdigit()
     
@@ -717,7 +718,7 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     # All this timing code to make sure that 
     def play_video():
         try:
-            nonlocal frame_buffer, running, video_fps, is_webcam, num_frames, frames_displayed, vid_done
+            global frame_buffer, running, video_fps, is_webcam, num_frames, frames_displayed, vid_done
 
             video_frame_times = MovingAverage(100)
             frame_time_stabilizer = frame_time_target
@@ -749,7 +750,7 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
                         progress_bar.set_val(frames_displayed)
 
                         print('\rProcessing Frames  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
-                            % (repr(progress_bar), frames_displayed, num_frames, progress, fps), end='')
+                            % (repr(progress_bar), frames_displayed, num_frames, progress, fps))
 
                 
                 # This is split because you don't want savevideo to require cv2 display functionality (see #197)
@@ -791,7 +792,7 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
     extract_frame = lambda x, i: (x[0][i] if x[1][i]['detection'] is None else x[0][i].to(x[1][i]['detection']['box'].device), [x[1][i]])
 
     # Prime the network on the first frame because I do some thread unsafe things otherwise
-    print('Initializing model... ', end='')
+    print('Initializing model... ')
     first_batch = eval_network(transform_frame(get_next_frame(vid)))
     print('Done.')
 
@@ -860,14 +861,14 @@ def evalvideo(net:Yolact, path:str, out_path:str=None):
             
             fps_str = 'Processing FPS: %.2f | Video Playback FPS: %.2f | Frames in Buffer: %d' % (fps, video_fps, frame_buffer.qsize())
             if not args.display_fps:
-                print('\r' + fps_str + '    ', end='')
+                print('\r' + fps_str + '    ')
 
     except KeyboardInterrupt:
         print('\nStopping...')
     
     cleanup_and_exit()
 
-def evaluate(net:Yolact, dataset, train_mode=False):
+def evaluate(net, dataset, train_mode=False):
     net.detect.use_fast_nms = args.fast_nms
     net.detect.use_cross_class_nms = args.cross_class_nms
     cfg.mask_proto_debug = args.mask_proto_debug
@@ -891,6 +892,8 @@ def evaluate(net:Yolact, dataset, train_mode=False):
         else:
             evalvideo(net, args.video)
         return
+    elif args.ros is not None:
+        evalros(net,args)
 
     frame_times = MovingAverage()
     dataset_size = len(dataset) if args.max_images < 0 else min(args.max_images, len(dataset))
@@ -972,7 +975,7 @@ def evaluate(net:Yolact, dataset, train_mode=False):
                 progress = (it+1) / dataset_size * 100
                 progress_bar.set_val(it+1)
                 print('\rProcessing Images  %s %6d / %6d (%5.2f%%)    %5.2f fps        '
-                    % (repr(progress_bar), it+1, dataset_size, progress, fps), end='')
+                    % (repr(progress_bar), it+1, dataset_size, progress, fps))
 
 
 
@@ -1052,17 +1055,6 @@ if __name__ == '__main__':
     if args.config is not None:
         set_cfg(args.config)
 
-    if args.trained_model == 'interrupt':
-        args.trained_model = SavePath.get_interrupt('weights/')
-    elif args.trained_model == 'latest':
-        args.trained_model = SavePath.get_latest('weights/', cfg.name)
-
-    if args.config is None:
-        model_path = SavePath.from_str(args.trained_model)
-        # TODO: Bad practice? Probably want to do a name lookup instead.
-        args.config = model_path.model_name + '_config'
-        print('Config not specified. Parsed %s from the file name.\n' % args.config)
-        set_cfg(args.config)
 
     if args.detect:
         cfg.eval_mask_branch = False
@@ -1093,7 +1085,7 @@ if __name__ == '__main__':
         else:
             dataset = None        
 
-        print('Loading model...', end='')
+        print('Loading model...')
         net = Yolact()
         net.load_weights(args.trained_model)
         net.eval()

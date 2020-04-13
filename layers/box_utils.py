@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import division
 import torch
 from utils import timer
 
 from data import cfg
 
-@torch.jit.script
+
 def point_form(boxes):
     """ Convert prior_boxes to (xmin, ymin, xmax, ymax)
     representation for comparison to point form ground truth data.
@@ -17,7 +18,7 @@ def point_form(boxes):
                      boxes[:, :2] + boxes[:, 2:]/2), 1)  # xmax, ymax
 
 
-@torch.jit.script
+
 def center_size(boxes):
     """ Convert prior_boxes to (cx, cy, w, h)
     representation for comparison to center-size form ground truth data.
@@ -29,7 +30,7 @@ def center_size(boxes):
     return torch.cat(( (boxes[:, 2:] + boxes[:, :2])/2,     # cx, cy
                         boxes[:, 2:] - boxes[:, :2]  ), 1)  # w, h
 
-@torch.jit.script
+
 def intersect(box_a, box_b):
     """ We resize both tensors to [A,B,2] without new malloc:
     [A,2] -> [A,1,2] -> [A,B,2]
@@ -51,7 +52,7 @@ def intersect(box_a, box_b):
     return torch.clamp(max_xy - min_xy, min=0).prod(3)  # inter
 
 
-def jaccard(box_a, box_b, iscrowd:bool=False):
+def jaccard(box_a, box_b, iscrowd=False):
     """Compute the jaccard overlap of two sets of boxes.  The jaccard overlap
     is simply the intersection over union of two boxes.  Here we operate on
     ground truth boxes and default boxes. If iscrowd=True, put the crowd in box_b.
@@ -106,7 +107,7 @@ def mask_iou(masks_a, masks_b, iscrowd=False):
     masks_a = masks_a.view(masks_a.size(0), -1)
     masks_b = masks_b.view(masks_b.size(0), -1)
 
-    intersection = masks_a @ masks_b.t()
+    intersection = torch.matmul(masks_a , masks_b.t())
     area_a = masks_a.sum(dim=1).unsqueeze(1)
     area_b = masks_b.sum(dim=1).unsqueeze(0)
 
@@ -226,8 +227,7 @@ def match(pos_thresh, neg_thresh, truths, priors, labels, crowd_boxes, loc_t, co
     conf_t[idx] = conf   # [num_priors] top class label for each prior
     idx_t[idx]  = best_truth_idx # [num_priors] indices for lookup
 
-@torch.jit.script
-def encode(matched, priors, use_yolo_regressors:bool=False):
+def encode(matched, priors, use_yolo_regressors=False):
     """
     Encode bboxes matched with each prior into the format
     produced by the network. See decode for more details on
@@ -264,8 +264,8 @@ def encode(matched, priors, use_yolo_regressors:bool=False):
         
     return loc
 
-@torch.jit.script
-def decode(loc, priors, use_yolo_regressors:bool=False):
+
+def decode(loc, priors, use_yolo_regressors=False):
     """
     Decode predicted bbox coordinates using the same scheme
     employed by Yolov2: https://arxiv.org/pdf/1612.08242.pdf
@@ -324,8 +324,8 @@ def log_sum_exp(x):
     return torch.log(torch.sum(torch.exp(x-x_max), 1)) + x_max
 
 
-@torch.jit.script
-def sanitize_coordinates(_x1, _x2, img_size:int, padding:int=0, cast:bool=True):
+
+def sanitize_coordinates(_x1, _x2, img_size, padding=0, cast=True):
     """
     Sanitizes the input coordinates so that x1 < x2, x1 != x2, x1 >= 0, and x2 <= image_size.
     Also converts from relative to absolute coordinates and casts the results to long tensors.
@@ -346,8 +346,8 @@ def sanitize_coordinates(_x1, _x2, img_size:int, padding:int=0, cast:bool=True):
     return x1, x2
 
 
-@torch.jit.script
-def crop(masks, boxes, padding:int=1):
+
+def crop(masks, boxes, padding=1):
     """
     "Crop" predicted masks by zeroing out everything not in the predicted bbox.
     Vectorized by Chong (thanks Chong).
